@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 #   Version handled manually as project(... VERSION ...) is not used
 #   in tests/examples which are subprojects. All calls must use
 #   the same form.
-project(Trackinglib)
+project(Trackingliblineslines)
 set(${PROJECT_NAME}_VERSION_MAJOR  0)
 set(${PROJECT_NAME}_VERSION_MINOR  1)
 set(${PROJECT_NAME}_VERSION_PATCH  0)
@@ -20,11 +20,10 @@ set(CMAKE_MODULE_PATH
     ${PROJECT_SOURCE_DIR}/cmake/Modules
     ${CMAKE_MODULE_PATH})
 set(CMAKE_MODULE_PATH
-    "$ENV{ROOTSYS}/etc/cmake"
     ${CMAKE_MODULE_PATH})
-list(APPEND CMAKE_PREFIX_PATH $ENV{ROOTSYS})
+list(APPEND CMAKE_PREFIX_PATH )
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_definitions( -DTIXML_USE_STL )
 
@@ -32,34 +31,19 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 link_directories(${CMAKE_SOURCE_DIR}/lib)
 
 
+
+#find_package(ROOT REQUIRED COMPONENTS Core RIO Tree)
+#include_directories(${ROOT_INCLUDE_DIRS})
+
 # - Find ROOT Modules
 #
-list(APPEND CMAKE_PREFIX_PATH $ENV{ROOTSYS})
-find_package(ROOT REQUIRED COMPONENTS RIO)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ROOT_CXX_FLAGS} -std=c++11 -pthread -Wno-deprecated-declarations")
+#list(APPEND CMAKE_PREFIX_PATH $ENV{ROOTSYS})
+#find_package(ROOT REQUIRED COMPONENTS RIO)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -std=c++17 -pthread -Wno-deprecated-declarations" )
 set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -lncurses" )
-include_directories(${ROOT_INCLUDE_DIR} ${CMAKE_SOURCE_DIR})
-link_directories(${ROOT_LIBRARY_DIR})
+include_directories( ${CMAKE_SOURCE_DIR})
+#link_directories(${ROOT_LIBRARY_DIR})
 
-## Override root's ROOT_GENERATE_DICTIONARY macro to be less error-prone. This
-## is done by only allowing for explicitly speficied header locations/include
-## directories, instead of using the full search path for this module.
-function(ROOT_GENERATE_DICTIONARY dictionary)
-  CMAKE_PARSE_ARGUMENTS(ARG "" "" "LINKDEF;OPTIONS" "" ${ARGN})
-  ## Get all include directories
-  get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
-  set(extra_includes "")
-  foreach(dir ${dirs})
-    set(extra_includes ${extra_includes} "-I${dir}")
-  endforeach()
-  ## find and call ROOTCLING
-  find_program(ROOTCLING rootcling)
-  add_custom_command(
-    OUTPUT ${dictionary}.cxx ${dictionary}_rdict.pcm
-    COMMAND ${ROOTCLING} -f ${dictionary}.cxx -s ${dictionary}.pcm
-    ${ARG_OPTIONS} ${ARG_UNPARSED_ARGUMENTS} ${extra_includes} ${ARG_LINKDEF}
-    DEPENDS ${includes} ${linkdefs})
-endfunction()
 
 
 # - Configure output Modules
@@ -74,9 +58,29 @@ file(GLOB HDRFILES ${PROJECT_SOURCE_DIR}/include/*.h)
 
 
 
-ROOT_GENERATE_DICTIONARY(Trackinglib_Dict ${HDRFILES} LINKDEF include/LinkDef.hh)
-add_library(Trackinglib SHARED ${HDRFILES} ${SRCFILES} Trackinglib_Dict.cxx)
+#ROOT_GENERATE_DICTIONARY(Trackingliblines_Dict ${HDRFILES} LINKDEF include/LinkDef.hh)
+add_library(Trackingliblines SHARED ${HDRFILES} ${SRCFILES} include/LinkDef.hh)
 
 
 
-target_link_libraries(Trackinglib ${ROOT_LIBRARIES} ${FFTW_LIBRARIES} Html Spectrum XMLIO)
+# --------------------------------
+# Add pybind11 locally
+# --------------------------------
+add_subdirectory(pybind11)  # Assuming pybind11/ is in your project root
+
+# --------------------------------
+# Python bindings target
+# --------------------------------
+# This will be a separate .cpp file just for Python bindings
+set(PYTHON_BINDINGS ${PROJECT_SOURCE_DIR}/python_bindings.cpp)
+
+# Build the Python module linking against your existing Trackingliblines
+pybind11_add_module(pyTrackinglines ${PYTHON_BINDINGS})
+
+# Link it to your existing library and ROOT
+target_link_libraries(pyTrackinglines PRIVATE Trackingliblines -O3 -march=native)
+
+# Output the compiled .so into your project source directory for easy import
+set_target_properties(pyTrackinglines PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)

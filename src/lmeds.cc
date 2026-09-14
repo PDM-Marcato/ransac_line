@@ -10,7 +10,7 @@
 
 using namespace std;
 
-ClassImp(LMedS)
+//ClassImp(LMedS)
 
 LMedS::LMedS() {
 
@@ -22,10 +22,11 @@ LMedS::LMedS() {
 
 LMedS::~LMedS() {
 
-  delete Rand;
+  //delete Rand;
 }
 
-void LMedS::Init(vector<double> v1, vector<double> v2, vector<double> v3, vector<double> v4)
+//void LMedS::Init(vector<double> v1, vector<double> v2, vector<double> v3, vector<double> v4)
+ void LMedS::Init(const vector<double>& v1, const vector<double>& v2, const vector<double>& v3, const vector<double>& v4)
 {
 
   Reset();
@@ -35,13 +36,8 @@ void LMedS::Init(vector<double> v1, vector<double> v2, vector<double> v3, vector
 	vQ = v4;
 
 	fOriginalCloudSize = vX.size();
-	double TotalCharge=0;
-	for(unsigned int i=0; i< vQ.size(); i++){
-		TotalCharge += vQ[i];
-	}
-	fTotalCharge = TotalCharge;
-
-  Rand =new TRandom();
+	Vs.reserve(3);
+  Ps.reserve(3);
 
   //std::cout << "/* LMedS inicializa  */" << '\n';
 
@@ -54,9 +50,10 @@ void LMedS::Reset()
 	vY.clear();
 	vZ.clear();
 	vQ.clear();
-  Vs.Clear();
-  Ps.Clear();
+  Vs.clear();
+  Ps.clear();
   errorsVec.clear();
+  cluster_vector.clear();
   //delete Rand;
 
 }
@@ -74,7 +71,7 @@ void LMedS::Solve(double dist_thres, double Nminpoints, int Nintera)
     for (size_t i = 0; i < vX.size(); i++)
     remainIndex.push_back(i);
 
-  	TVector3 V1, V2;
+  	//TVector3 V1, V2;
   	std::vector< int> inliners;
     inliners.clear();
     std::vector< std::pair <double,int> >  IdxMod1;
@@ -88,7 +85,8 @@ void LMedS::Solve(double dist_thres, double Nminpoints, int Nintera)
 
         if(remainIndex.size()<fLMedSMinPoints) break;
 
-        std::vector< int> Rsamples = RandSam(remainIndex,fRandSamplMode);  //random sampling
+        //std::vector< int> Rsamples = RandSam(remainIndex,fRandSamplMode);  //random sampling
+        std::array<int, 2> Rsamples = RandSam(remainIndex,fRandSamplMode);  //random sampling
         EstimModel(Rsamples); //estimate the linear model
 
 
@@ -132,10 +130,11 @@ void LMedS::Solve(double dist_thres, double Nminpoints, int Nintera)
       //extract inliers using the models
       for (int i = 0; i < IdxMod1.size(); ++i)
       {
-        std::vector<int> ModInx = {IdxMod1[i].second, IdxMod2[i].second};
+        //std::vector<int> ModInx = {IdxMod1[i].second, IdxMod2[i].second};
+        std::array<int, 2> ModInx = {IdxMod1[i].second, IdxMod2[i].second};
         EstimModel(ModInx);
         std::vector<int> inlIdxR;
-        ModInx.clear();
+        //ModInx.clear();
 
         if(remainIndex.size()<fLMedSMinPoints) break;
 
@@ -154,11 +153,13 @@ void LMedS::Solve(double dist_thres, double Nminpoints, int Nintera)
         }
 
         if(counter>fLMedSMinPoints){
-          TVector3 v1, v2;
-  	      double chi2=Fit3D(inlIdxR,v1,v2);
-          SetCluster(inlIdxR, IdxMod1[i].first, chi2,v1,v2);
-          v1.Clear();
-          v2.Clear();
+          //TVector3 v1, v2;
+          std::vector<double> v20(2);
+  	  //double chi2=Fit3D(inlIdxR,v1,v2);
+          double chi2=Fit2D(inlIdxR, v20);
+          SetCluster(inlIdxR, IdxMod1[i].first, chi2,v20,v20);
+
+          v20.clear();
         }
         std::vector<int> tempRemain;
         std::set_difference(remainIndex.begin(), remainIndex.end(), inlIdxR.begin(), inlIdxR.end(),
@@ -189,25 +190,36 @@ vector<double> LMedS::GetPDF(const std::vector<int>  samplesIdx){
   return w;
 }
 
-vector<int> LMedS::RandSam(vector<int> indX, Int_t mode)
+
+
+
+std::array<int, 2> LMedS::RandSam( const vector<int>& indX, int mode)
 {
+
   size_t pclouds = indX.size();
-  std::vector<double> Proba = GetPDF(indX);
-  int p1,p2;
+  int p1,p2, p3;
   double w1,w2;
-  vector<int> ranpair;
-  ranpair.resize(2);
+  std::array<int, 2> ranpair;
+  //ranpair.resize(3);
+   static std::random_device rd;
+   static std::mt19937 gen(rd());
+   std::uniform_real_distribution<double> dis(0.0, 1.0);
+
+
 
   if(mode==0){
     //-------Uniform sampling
-    p1=(int)(gRandom->Uniform(0,pclouds));
+    //p1=(int)(gRandom->Uniform(0,pclouds));
+    p1=(int)(pclouds* dis(gen));
 
-     do{
-       p2=(int)(gRandom->Uniform(0,pclouds));
+	   do{
+                //p2=(int)(gRandom->Uniform(0,pclouds));
+                p2=(int)(pclouds* dis(gen));
      } while(p2==p1);
 
      ranpair[0] = indX[p1];
      ranpair[1] = indX[p2];
+
   }
 
   if(mode==1){
@@ -217,115 +229,88 @@ vector<int> LMedS::RandSam(vector<int> indX, Int_t mode)
     double y = 0;
     double gauss = 0;
     int counter = 0;
-    p1=(int)(gRandom->Uniform(0,pclouds));
-    TVector3 P1 ={vX[indX[p1]],vY[indX[p1]],vZ[indX[p1]]};
-    do{
-      p2=(int)(gRandom->Uniform(0,pclouds));
-      TVector3 P2 ={vX[indX[p2]],vY[indX[p2]],vZ[indX[p2]]};
-      TVector3 dif = P2-P1;
-      dist = dif.Mag();
+    //p1=(int)(gRandom->Uniform(0,pclouds));
+    p1=(int)(pclouds* dis(gen));
+    double P1[3] = {vX[indX[p1]],vY[indX[p1]],vZ[indX[p1]]};
+	  do{
+      //p2=(int)(gRandom->Uniform(0,pclouds));
+        p2=(int)(pclouds* dis(gen));
+       double P2[3] ={vX[indX[p2]],vY[indX[p2]],vZ[indX[p2]]};
+      std::array<double, 3> dif = DiffVectors(P2, P1);
+      dist = Mag_vec(dif);
       gauss = 1.0*exp(-1.0*pow(dist/sigma,2.0));
-      y = (gRandom->Uniform(0,1));
+      //y = (gRandom->Uniform(0,1));
+        y = (dis(gen));
       counter++;
       if(counter>20 && p2!=p1) break;
       } while(p2==p1 || y>gauss);
 
+
+
       ranpair[0] = indX[p1];
       ranpair[1] = indX[p2];
+
   }
 
-  if(mode==2){
-    //-------Weighted sampling
-    bool cond = false;
-    int counter = 0;
-    p1=(int)(gRandom->Uniform(0,pclouds));
-    do{
-      counter++;
-      if(counter>30 && p2!=p1) break;
-      p2=(int)(gRandom->Uniform(0,pclouds));
-      cond = false;
-      double TwiceAvCharge = 2*GetAvCharge();
-      if(Proba.size()==pclouds){
-        w2 = gRandom->Uniform(0,TwiceAvCharge);
-        if(Proba[p2]>=w2) cond = true;
-      }else{
-        w2 = 1;
-        cond = true;
-      }
-    } while(p2==p1 || cond==false);
-
-    ranpair[0] = indX[p1];
-    ranpair[1] = indX[p2];
-  }
-
-  if(mode==3){
-    //-------Weighted sampling + Gauss dist.
-    bool cond = false;
-    double dist = 0;
-    double sigma = 30.0;
-    double y = 0;
-    double gauss = 0;
-    int counter = 0;
-    p1=(int)(gRandom->Uniform(0,pclouds));
-    TVector3 P1 ={vX[indX[p1]],vY[indX[p1]],vZ[indX[p1]]};
-    do{
-      p2=(int)(gRandom->Uniform(0,pclouds));
-      TVector3 P2 ={vX[indX[p2]],vY[indX[p2]],vZ[indX[p2]]};
-      TVector3 dif = P2-P1;
-      dist = dif.Mag();
-      gauss = 1.0*exp(-1.0*pow(dist/sigma,2));
-      y = (gRandom->Uniform(0,1));
-      counter++;
-      if(counter>30 && p2!=p1) break;
-
-      cond = false;
-      double TwiceAvCharge = 2*GetAvCharge();
-      if(Proba.size()==pclouds){
-        w2 = gRandom->Uniform(0,TwiceAvCharge);
-        if(Proba[p2]>=w2) cond = true;
-        }else{
-        w2 = 1;
-        cond = true;
-      }
-
-    } while(p2==p1 || cond==false || y>gauss);
-
-    ranpair[0] = indX[p1];
-    ranpair[1] = indX[p2];
-  }
 
   return ranpair;
 
 }
 
+std::array<double, 3> LMedS:: DiffVectors(double* a, double* b)
+{
+    std::array<double,3> c;
 
-void LMedS::EstimModel(const std::vector<int>  samplesIdx)
+     for(int i=0;i<3; i++) c[i] = a[i] -b[i] ;
+
+        return c;
+}
+
+double LMedS::Mag_vec(std::array<double, 3> a)
+{
+        double norm = 0;
+        int sa = sizeof(a) / sizeof(a[0]);
+        for(int i =0; i<sa; i++) norm += a[i]*a[i];
+        return sqrt(norm);
+
+}
+
+
+
+void LMedS::EstimModel(const std::array<int, 2>  samplesIdx)
 {
 
   //line from two points
-  TVector3 Po1 = {vX[samplesIdx[0]], vY[samplesIdx[0]], vZ[samplesIdx[0]]};
-  TVector3 Po2 = {vX[samplesIdx[1]], vY[samplesIdx[1]], vZ[samplesIdx[1]]};
+  double Po1[3] = {vX[samplesIdx[0]], vY[samplesIdx[0]], 0};
+  double Po2[3] = {vX[samplesIdx[1]], vY[samplesIdx[1]], 0};
 
-  Vs = Po2 - Po1;
-  Ps = Po1;
+  double dx = Po2[0] - Po1[0];
+  double dy = Po2[1] - Po1[1];
+
+  Vs = {dx,dy,0};
+  Ps = {Po1[0], Po1[1], 0};
 
 }
 
 double LMedS::EstimError(int i)
 {
     //distance point to line
-    TVector3 newPoint = {vX[i], vY[i], vZ[i]};
-    TVector3 vec = Ps - newPoint;
-    TVector3 nD = Vs.Cross(vec);
+    //TVector3 newPoint = {vX[i], vY[i], vZ[i]};
+    double newPoint[3] = {vX[i], vY[i], vZ[i]};
+    double vec[3] = {Ps[0]-newPoint[0], Ps[1]-newPoint[1], Ps[2]-newPoint[2]};
+    double nDx = Vs[1]*vec[2] - Vs[2]*vec[1];
+    double nDy = Vs[2]*vec[0] - Vs[0]*vec[2];
+    double nDz = Vs[0]*vec[1] - Vs[1]*vec[0];
+    double nD[3]  = {nDx, nDy, nDz};
 
-	  double dist = nD.Mag()/Vs.Mag();
+	  double dist = sqrt( (nD[0]*nD[0]+nD[1]*nD[1]+nD[2]*nD[2])/(Vs[0]*Vs[0]+Vs[1]*Vs[1]+Vs[2]*Vs[2]));
 
 
     return  dist;
 }
 
 
-void LMedS::SetCluster(const std::vector<int> samplesIdx, const double cost, const double Chi2, TVector3 CP1, TVector3 CP2)
+void LMedS::SetCluster(const std::vector<int> samplesIdx, const double cost, const double Chi2, const std::vector<double>& CP1, const std::vector<double>& CP2)
 {
 
     Cluster cstr;
@@ -338,116 +323,94 @@ void LMedS::SetCluster(const std::vector<int> samplesIdx, const double cost, con
     cluster_vector.push_back(cstr);
 }
 
-double LMedS::GetMedian(std::vector<double> errvec)
-{
-  size_t vsize = errvec.size();
 
-  if (vsize == 0)
-  {
-    return 0;
-  }
-  else
-  {
-    sort(errvec.begin(), errvec.end());
+double LMedS::GetMedian(const std::vector<double>& errvec)
+{
+    const size_t vsize = errvec.size();
+
+    if (vsize == 0)
+        return 0.0;
+
+    // Make one local copy because nth_element modifies data
+    std::vector<double> temp(errvec);
+
+    const size_t mid = vsize / 2;
+
+    // Put median element in correct position
+    std::nth_element(temp.begin(),
+                     temp.begin() + mid,
+                     temp.end());
+
+    double median = temp[mid];
+
+    // Even number of elements
     if (vsize % 2 == 0)
     {
-      return (errvec[vsize / 2 - 1] + errvec[vsize / 2]) / 2;
-    }
-    else
-    {
-      return errvec[vsize / 2];
-    }
-  }
+        std::nth_element(temp.begin(),
+                         temp.begin() + mid - 1,
+                         temp.begin() + mid);
 
+        median = 0.5 * (median + temp[mid - 1]);
+    }
+
+    return median;
 }
 
-double LMedS::Fit3D( vector<int> inliners, TVector3& V1, TVector3& V2)
+
+
+
+
+
+double LMedS::Fit2D(const std::vector<int>& inliners,std::vector<double>& V1)
 {
-    //------3D Line Regression
-    //----- adapted from: http://fr.scribd.com/doc/31477970/Regressions-et-trajectoires-3D
-    int R, C;
-    double Q;
-    double Xm,Ym,Zm;
-    double Xh,Yh,Zh;
-    double a,b;
-    double Sxx,Sxy,Syy,Sxz,Szz,Syz;
-    double theta;
-    double K11,K22,K12,K10,K01,K00;
-    double c0,c1,c2;
-    double p,q,r,dm2;
-    double rho,phi;
+    const int npoints = inliners.size();
 
-    Q=Xm=Ym=Zm=0.;
-		double total_charge=0;
-    Sxx=Syy=Szz=Sxy=Sxz=Syz=0.;
+    if (npoints < 2)
+        return 1e9;
 
-    for (auto i : inliners)
+    double Sx  = 0.0;
+    double Sy  = 0.0;
+    double Sxx = 0.0;
+    double Sxy = 0.0;
+
+    // Accumulate sums
+    for (const int idx : inliners)
     {
-        Q+=vQ[i]/10.;
-        Xm+=vX[i]*vQ[i]/10.;
-        Ym+=vY[i]*vQ[i]/10.;
-        Zm+=vZ[i]*vQ[i]/10.;
-        Sxx+=vX[i]*vX[i]*vQ[i]/10.;
-        Syy+=vY[i]*vY[i]*vQ[i]/10.;
-        Szz+=vZ[i]*vZ[i]*vQ[i]/10.;
-        Sxy+=vX[i]*vY[i]*vQ[i]/10.;
-        Sxz+=vX[i]*vZ[i]*vQ[i]/10.;
-        Syz+=vY[i]*vZ[i]*vQ[i]/10.;
-    }
-    //vTrackCharge.push_back(total_charge);
+        const double x = vX[idx];
+        const double y = vY[idx];
 
-    Xm/=Q;
-    Ym/=Q;
-    Zm/=Q;
-    Sxx/=Q;
-    Syy/=Q;
-    Szz/=Q;
-    Sxy/=Q;
-    Sxz/=Q;
-    Syz/=Q;
-    Sxx-=(Xm*Xm);
-    Syy-=(Ym*Ym);
-    Szz-=(Zm*Zm);
-    Sxy-=(Xm*Ym);
-    Sxz-=(Xm*Zm);
-    Syz-=(Ym*Zm);
-
-    theta=0.5*atan((2.*Sxy)/(Sxx-Syy));
-
-    K11=(Syy+Szz)*pow(cos(theta),2)+(Sxx+Szz)*pow(sin(theta),2)-2.*Sxy*cos(theta)*sin(theta);
-    K22=(Syy+Szz)*pow(sin(theta),2)+(Sxx+Szz)*pow(cos(theta),2)+2.*Sxy*cos(theta)*sin(theta);
-    K12=-Sxy*(pow(cos(theta),2)-pow(sin(theta),2))+(Sxx-Syy)*cos(theta)*sin(theta);
-    K10=Sxz*cos(theta)+Syz*sin(theta);
-    K01=-Sxz*sin(theta)+Syz*cos(theta);
-    K00=Sxx+Syy;
-
-    c2=-K00-K11-K22;
-    c1=K00*K11+K00*K22+K11*K22-K01*K01-K10*K10;
-    c0=K01*K01*K11+K10*K10*K22-K00*K11*K22;
-
-
-    p=c1-pow(c2,2)/3.;
-    q=2.*pow(c2,3)/27.-c1*c2/3.+c0;
-    r=pow(q/2.,2)+pow(p,3)/27.;
-
-
-    if(r>0) dm2=-c2/3.+pow(-q/2.+sqrt(r),1./3.)+pow(-q/2.-sqrt(r),1./3.);
-    if(r<0)
-    {
-        rho=sqrt(-pow(p,3)/27.);
-        phi=acos(-q/(2.*rho));
-        dm2=min(-c2/3.+2.*pow(rho,1./3.)*cos(phi/3.),min(-c2/3.+2.*pow(rho,1./3.)*cos((phi+2.*TMath::Pi())/3.),-c2/3.+2.*pow(rho,1./3.)*cos((phi+4.*TMath::Pi())/3.)));
+        Sx  += x;
+        Sy  += y;
+        Sxx += x * x;
+        Sxy += x * y;
     }
 
-    a=-K10*cos(theta)/(K11-dm2)+K01*sin(theta)/(K22-dm2);
-    b=-K10*sin(theta)/(K11-dm2)-K01*cos(theta)/(K22-dm2);
+    const double denom = npoints * Sxx - Sx * Sx;
 
-    Xh=((1.+b*b)*Xm-a*b*Ym+a*Zm)/(1.+a*a+b*b);
-    Yh=((1.+a*a)*Ym-a*b*Xm+b*Zm)/(1.+a*a+b*b);
-    Zh=((a*a+b*b)*Zm+a*Xm+b*Ym)/(1.+a*a+b*b);
+    if (std::abs(denom) < 1e-12)
+        return 1e9;
 
-    V1.SetXYZ(Xm,Ym,Zm);
-    V2.SetXYZ(Xh,Yh,Zh);
+    // Linear regression
+    const double m = (npoints * Sxy - Sx * Sy) / denom;
+    const double b = (Sy - m * Sx) / npoints;
 
-    return(fabs(dm2/Q));
+    // Compute chi2
+    double chi2 = 0.0;
+
+    for (const int idx : inliners)
+    {
+        const double residual = vY[idx] - (m * vX[idx] + b);
+        chi2 += residual * residual;
+    }
+
+    const double nu = npoints - 2;
+
+    const double chi2_red =
+        (nu > 0) ? chi2 / nu : chi2;
+
+    // Store fit parameters
+    V1 = {m, b};
+
+
+    return chi2_red;
 }
